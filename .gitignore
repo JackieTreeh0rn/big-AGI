@@ -45,3 +45,5 @@ next-env.d.ts
 
 # Ingore k8s/env-secret.yaml
 ./k8s/env-secret.yaml
+
+RUN.md
