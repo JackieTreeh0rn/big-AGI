@@ -4,10 +4,10 @@
 
 import { z } from 'zod';
 
-import { createTRPCRouter, publicProcedure } from '~/server/api/trpc.server';
-import { fetchTextOrTRPCError } from '~/server/api/trpc.router.fetchers';
+import { createTRPCRouter, publicProcedure } from '~/server/trpc/trpc.server';
+import { fetchTextOrTRPCThrow } from '~/server/trpc/trpc.router.fetchers';
 
-import { fetchYouTubeTranscript } from './youtube.fetcher';
+import { downloadYouTubeVideoData } from './youtube.server';
 
 
 const inputSchema = z.object({
@@ -24,7 +24,7 @@ export const youtubeRouter = createTRPCRouter({
     .input(inputSchema)
     .query(async ({ input }) => {
       const { videoId } = input;
-      return await fetchYouTubeTranscript(videoId, url => fetchTextOrTRPCError(url, 'GET', {}, undefined, 'YouTube Transcript'));
+      return await downloadYouTubeVideoData(videoId, (url) => fetchTextOrTRPCThrow({ url, name: 'YouTube Transcript' }));
     }),
 
 });

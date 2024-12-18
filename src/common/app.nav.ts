@@ -7,6 +7,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import CallIcon from '@mui/icons-material/Call';
 import CallOutlinedIcon from '@mui/icons-material/CallOutlined';
+import DifferenceOutlinedIcon from '@mui/icons-material/DifferenceOutlined';
 import Diversity2Icon from '@mui/icons-material/Diversity2';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
@@ -31,7 +32,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 
 import { Brand } from '~/common/app.config';
 import { ChatBeamIcon } from '~/common/components/icons/ChatBeamIcon';
-import { hasNoChatLinkItems } from '~/modules/trade/link/store-link';
+import { hasNoChatLinkItems } from '~/modules/trade/link/store-share-link';
 
 
 // enable to show all items, for layout development
@@ -54,6 +55,7 @@ export interface NavItemApp extends ItemBase {
   route: string,
   landingRoute?: string,  // specify a different route than the nextjs page router route, to land to
   barTitle?: string,      // set to override the name as the bar title (unless custom bar content is used)
+  appMenuToPanel?: boolean, // set to true to open the app menu in a panel
   hideOnMobile?: boolean, // set to true to hide the icon on mobile, unless this is the active app
   hideIcon?: boolean
     | (() => boolean),    // set to true to hide the icon, unless this is the active app
@@ -96,6 +98,7 @@ export const navItems: {
       iconActive: TextsmsIcon,
       type: 'app',
       route: '/',
+      appMenuToPanel: true,
     },
     {
       name: 'Call',
@@ -109,15 +112,14 @@ export const navItems: {
     },
     {
       name: 'Draw',
-      barTitle: 'Generate Images',
       icon: FormatPaintOutlinedIcon,
       iconActive: FormatPaintTwoToneIcon,
       type: 'app',
       route: '/draw',
-      // hideOnMobile: true,
       hideDrawer: true,
-      isDev: true,
-      _delete: true,
+      // hideOnMobile: true,
+      // isDev: true,
+      // _delete: true,
     },
     {
       name: 'Cortex',
@@ -156,7 +158,7 @@ export const navItems: {
       icon: () => null,
     },
     {
-      name: 'Personas',
+      name: 'Create Personas',
       icon: Diversity2Icon, // was: Outlined.. but they look the same
       // iconActive: Diversity2Icon,
       type: 'app',
@@ -164,7 +166,16 @@ export const navItems: {
       hideBar: true,
     },
     {
-      name: 'Tokenize',
+      name: 'Compare Text',
+      barTitle: 'Comparison',
+      icon: DifferenceOutlinedIcon,
+      type: 'app',
+      route: '/diff',
+      hideDrawer: true,
+    },
+    {
+      name: 'Tokenize Text',
+      barTitle: 'Tokenization',
       icon: GrainIcon,
       type: 'app',
       route: '/tokens',
@@ -189,7 +200,8 @@ export const navItems: {
       _delete: true,
     },
     {
-      name: 'Shared Chat',
+      name: 'Shared Chats',
+      barTitle: 'Shared Chat',
       icon: IosShareOutlinedIcon,
       iconActive: IosShareIcon,
       type: 'app',

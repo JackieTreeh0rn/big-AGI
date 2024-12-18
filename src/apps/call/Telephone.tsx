@@ -11,19 +11,26 @@ import RecordVoiceOverTwoToneIcon from '@mui/icons-material/RecordVoiceOverTwoTo
 
 import { ScrollToBottom } from '~/common/scroll-to-bottom/ScrollToBottom';
 import { ScrollToBottomButton } from '~/common/scroll-to-bottom/ScrollToBottomButton';
-import { useChatLLMDropdown } from '../chat/components/useLLMDropdown';
+import { useChatLLMDropdown } from '../chat/components/layout-bar/useLLMDropdown';
 
-import { EXPERIMENTAL_speakTextStream } from '~/modules/elevenlabs/elevenlabs.client';
 import { SystemPurposeId, SystemPurposes } from '../../data';
-import { llmStreamingChatGenerate, VChatMessageIn } from '~/modules/llms/llm.client';
+import { elevenLabsSpeakText } from '~/modules/elevenlabs/elevenlabs.client';
+import { AixChatGenerateContent_DMessage, aixChatGenerateContent_DMessage_FromConversation } from '~/modules/aix/client/aix.client';
 import { useElevenLabsVoiceDropdown } from '~/modules/elevenlabs/useElevenLabsVoiceDropdown';
 
+import type { OptimaBarControlMethods } from '~/common/layout/optima/bar/OptimaBarDropdown';
+import { AudioPlayer } from '~/common/util/audio/AudioPlayer';
 import { Link } from '~/common/components/Link';
-import { SpeechResult, useSpeechRecognition } from '~/common/components/useSpeechRecognition';
-import { conversationTitle, createDMessage, DMessage, useChatStore } from '~/common/state/store-chats';
+import { OptimaToolbarIn } from '~/common/layout/optima/portals/OptimaPortalsIn';
+import { SpeechResult, useSpeechRecognition } from '~/common/components/speechrecognition/useSpeechRecognition';
+import { conversationTitle, remapMessagesSysToUsr } from '~/common/stores/chat/chat.conversation';
+import { createDMessageFromFragments, createDMessageTextContent, DMessage, messageFragmentsReduceText } from '~/common/stores/chat/chat.message';
+import { createErrorContentFragment } from '~/common/stores/chat/chat.fragments';
 import { launchAppChat, navigateToIndex } from '~/common/app.routes';
-import { playSoundUrl, usePlaySoundUrl } from '~/common/util/audioUtils';
-import { usePluggableOptimaLayout } from '~/common/layout/optima/useOptimaLayout';
+import { useChatStore } from '~/common/stores/chat/store-chats';
+import { useGlobalShortcuts } from '~/common/components/shortcuts/useGlobalShortcuts';
+import { usePlayUrl } from '~/common/util/audio/usePlayUrl';
+import { useSetOptimaAppMenu } from '~/common/layout/optima/useOptima';
 
 import type { AppCallIntent } from './AppCall';
 import { CallAvatar } from './components/CallAvatar';
@@ -95,10 +102,11 @@ export function Telephone(props: {
   const [personaTextInterim, setPersonaTextInterim] = React.useState<string | null>(null);
   const [pushToTalk, setPushToTalk] = React.useState(true);
   const [stage, setStage] = React.useState<'ring' | 'declined' | 'connected' | 'ended'>('ring');
+  const llmDropdownRef = React.useRef<OptimaBarControlMethods>(null);
   const responseAbortController = React.useRef<AbortController | null>(null);
 
   // external state
-  const { chatLLMId, chatLLMDropdown } = useChatLLMDropdown();
+  const { chatLLMId, chatLLMDropdown } = useChatLLMDropdown(llmDropdownRef);
   const { chatTitle, reMessages } = useChatStore(useShallow(state => {
     const conversation = props.callIntent.conversationId
       ? state.conversations.find(conversation => conversation.id === props.callIntent.conversationId) ?? null
@@ -118,12 +126,12 @@ export function Telephone(props: {
   const onSpeechResultCallback = React.useCallback((result: SpeechResult) => {
     setSpeechInterim(result.done ? null : { ...result });
     if (result.done) {
-      const transcribed = result.transcript.trim();
-      if (transcribed.length >= 1)
-        setCallMessages(messages => [...messages, createDMessage('user', transcribed)]);
+      const userSpeechTranscribed = result.transcript.trim();
+      if (userSpeechTranscribed.length >= 1)
+        setCallMessages(messages => [...messages, createDMessageTextContent('user', userSpeechTranscribed)]); // [state] append user:speech
     }
   }, []);
-  const { isSpeechEnabled, isRecording, isRecordingAudio, isRecordingSpeech, startRecording, stopRecording, toggleRecording } = useSpeechRecognition(onSpeechResultCallback, 1000);
+  const { recognitionState, startRecognition, stopRecognition, toggleRecognition } = useSpeechRecognition('webSpeechApi', onSpeechResultCallback, 1000);
 
   // derived state
   const isRinging = stage === 'ring';
@@ -136,17 +144,23 @@ export function Telephone(props: {
 
   // pickup / hangup
   React.useEffect(() => {
-    !isRinging && playSoundUrl(isConnected ? '/sounds/chat-begin.mp3' : '/sounds/chat-end.mp3');
+    !isRinging && AudioPlayer.playUrl(isConnected ? '/sounds/chat-begin.mp3' : '/sounds/chat-end.mp3');
   }, [isRinging, isConnected]);
 
   // ringtone
-  usePlaySoundUrl(isRinging ? '/sounds/chat-ringtone.mp3' : null, 300, 2800 * 2);
+  usePlayUrl(isRinging ? '/sounds/chat-ringtone.mp3' : null, 300, 2800 * 2);
 
+
+  /// Shortcuts
+
+  useGlobalShortcuts('Telephone', React.useMemo(() => [
+    { key: 'm', ctrl: true, action: toggleRecognition },
+  ], [toggleRecognition]));
 
   /// CONNECTED
 
   const handleCallStop = () => {
-    stopRecording();
+    stopRecognition(false);
     setStage('ended');
   };
 
@@ -169,9 +183,10 @@ export function Telephone(props: {
     const phoneMessages = personaCallStarters || ['Hello?', 'Hey!'];
     const firstMessage = phoneMessages[Math.floor(Math.random() * phoneMessages.length)];
 
-    setCallMessages([createDMessage('assistant', firstMessage)]);
+    setCallMessages([createDMessageTextContent('assistant', firstMessage)]); // [state] set assistant:hello message
+
     // fire/forget
-    void EXPERIMENTAL_speakTextStream(firstMessage, personaVoiceId);
+    void elevenLabsSpeakText(firstMessage, personaVoiceId, true, true);
 
     return () => clearInterval(interval);
   }, [isConnected, personaCallStarters, personaVoiceId]);
@@ -179,22 +194,30 @@ export function Telephone(props: {
   // [E] persona streaming response - upon new user message
   React.useEffect(() => {
     // only act when we have a new user message
-    if (!isConnected || callMessages.length < 1 || callMessages[callMessages.length - 1].role !== 'user')
+    if (!isConnected || callMessages.length < 1)
       return;
-    switch (callMessages[callMessages.length - 1].text) {
+
+    // Voice commands
+    const lastUserMessage = callMessages[callMessages.length - 1];
+    if (lastUserMessage.role !== 'user')
+      return;
+    switch (messageFragmentsReduceText(lastUserMessage.fragments)) {
       // do not respond
       case 'Stop.':
         return;
+
       // command: close the call
       case 'Goodbye.':
         setStage('ended');
         setTimeout(launchAppChat, 2000);
         return;
+
       // command: regenerate answer
       case 'Retry.':
       case 'Try again.':
         setCallMessages(messages => messages.slice(0, messages.length - 2));
         return;
+
       // command: restart chat
       case 'Restart.':
         setCallMessages([]);
@@ -204,43 +227,57 @@ export function Telephone(props: {
     // bail if no llm selected
     if (!chatLLMId) return;
 
-    // temp fix: when the chat has no messages, only assume a single system message
-    const chatMessages: { role: VChatMessageIn['role'], text: string }[] = (reMessages && reMessages.length > 0)
-      ? reMessages
-      : personaSystemMessage
-        ? [{ role: 'system', text: personaSystemMessage }]
-        : [];
 
-    // 'prompt' for a "telephone call"
-    // FIXME: can easily run ouf of tokens - if this gets traction, we'll fix it
-    const callPrompt: VChatMessageIn[] = [
-      { role: 'system', content: 'You are having a phone call. Your response style is brief and to the point, and according to your personality, defined below.' },
-      ...chatMessages.map(message => ({ role: message.role, content: message.text })),
-      { role: 'system', content: 'You are now on the phone call related to the chat above. Respect your personality and answer with short, friendly and accurate thoughtful lines.' },
-      ...callMessages.map(message => ({ role: message.role, content: message.text })),
+    // Call Message Generation Prompt
+    const callSystemInstruction = createDMessageTextContent('system', 'You are having a phone call. Your response style is brief and to the point, and according to your personality, defined below.');
+    const reMessagesRemapSysToUsr = remapMessagesSysToUsr(reMessages);
+    const callGenerationInputHistory: DMessage[] = [
+      // Chat messages, including the system prompt which is casted to a user message
+      // TODO: when upgrading to dynamic personas, we need to inject the persona message instead - not rely on reMessages, as messages[0] !== 'system'
+      ...(reMessagesRemapSysToUsr ? reMessagesRemapSysToUsr : [createDMessageTextContent('user', personaSystemMessage)]),
+      // Call system prompt 2, to indicate the call has started
+      createDMessageTextContent('user', '**You are now on the phone call related to the chat above**.\nRespect your personality and answer with short, friendly and accurate thoughtful brief lines.'),
+      // Call history
+      ...callMessages,
     ];
+
 
     // perform completion
     responseAbortController.current = new AbortController();
     let finalText = '';
-    let error: any | null = null;
     setPersonaTextInterim('💭...');
-    llmStreamingChatGenerate(chatLLMId, callPrompt, 'call', callMessages[0].id, null, null, responseAbortController.current.signal, ({ textSoFar }) => {
-      const text = textSoFar?.trim();
-      if (text) {
-        finalText = text;
-        setPersonaTextInterim(text);
-      }
+
+    aixChatGenerateContent_DMessage_FromConversation(
+      chatLLMId,
+      callSystemInstruction,
+      callGenerationInputHistory,
+      'call',
+      callMessages[0].id,
+      { abortSignal: responseAbortController.current.signal },
+      (update: AixChatGenerateContent_DMessage, _isDone: boolean) => {
+        const updatedText = messageFragmentsReduceText(update.fragments).trim();
+        if (updatedText)
+          setPersonaTextInterim(finalText = updatedText);
+      },
+    ).then((status) => {
+
+      // whether status.outcome === 'success' or not, we get a valid DMessage, eventually with Error Fragments inside
+      const fullMessage = createDMessageFromFragments('assistant', status.lastDMessage.fragments);
+      fullMessage.generator = status.lastDMessage.generator;
+      setCallMessages(messages => [...messages, fullMessage]); // [state] append assistant:call_response
+
+      // fire/forget
+      if (status.outcome === 'success' && finalText?.length >= 1)
+        void elevenLabsSpeakText(finalText, personaVoiceId, true, true);
+
     }).catch((err: DOMException) => {
-      if (err?.name !== 'AbortError')
-        error = err;
+      if (err?.name !== 'AbortError') {
+        // create an error message to explain the exception
+        const errorMesage = createDMessageFromFragments('assistant', [createErrorContentFragment(err.message || err.toString())]);
+        setCallMessages(messages => [...messages, errorMesage]); // [state] append assistant:call_response-ERROR
+      }
     }).finally(() => {
       setPersonaTextInterim(null);
-      if (finalText || error)
-        setCallMessages(messages => [...messages, createDMessage('assistant', finalText + (error ? ` (ERROR: ${error.message || error.toString()})` : ''))]);
-      // fire/forget
-      if (finalText?.length >= 1)
-        void EXPERIMENTAL_speakTextStream(finalText, personaVoiceId);
     });
 
     return () => {
@@ -250,7 +287,7 @@ export function Telephone(props: {
   }, [isConnected, callMessages, chatLLMId, personaVoiceId, personaSystemMessage, reMessages]);
 
   // [E] Message interrupter
-  const abortTrigger = isConnected && isRecordingSpeech;
+  const abortTrigger = isConnected && recognitionState.hasSpeech;
   React.useEffect(() => {
     if (abortTrigger && responseAbortController.current) {
       responseAbortController.current.abort();
@@ -261,16 +298,16 @@ export function Telephone(props: {
 
 
   // [E] continuous speech recognition (reload)
-  const shouldStartRecording = isConnected && !pushToTalk && speechInterim === null && !isRecordingAudio;
+  const shouldStartRecording = isConnected && !pushToTalk && speechInterim === null && !recognitionState.hasAudio;
   React.useEffect(() => {
     if (shouldStartRecording)
-      startRecording();
-  }, [shouldStartRecording, startRecording]);
+      startRecognition();
+  }, [shouldStartRecording, startRecognition]);
 
 
   // more derived state
   const personaName = persona?.title ?? 'Unknown';
-  const isMicEnabled = isSpeechEnabled;
+  const isMicEnabled = recognitionState.isAvailable;
   const isTTSEnabled = true;
   const isEnabled = isMicEnabled && isTTSEnabled;
 
@@ -284,10 +321,11 @@ export function Telephone(props: {
     , [overridePersonaVoice, pushToTalk],
   );
 
-  usePluggableOptimaLayout(null, chatLLMDropdown, menuItems, 'CallUI');
+  useSetOptimaAppMenu(menuItems, 'CallUI-Call');
 
 
   return <>
+    <OptimaToolbarIn>{chatLLMDropdown}</OptimaToolbarIn>
 
     <Typography
       level='h1'
@@ -339,7 +377,7 @@ export function Telephone(props: {
             {callMessages.map((message) =>
               <CallMessage
                 key={message.id}
-                text={message.text}
+                text={messageFragmentsReduceText(message.fragments)}
                 variant={message.role === 'assistant' ? 'solid' : 'soft'}
                 color={message.role === 'assistant' ? 'neutral' : 'primary'}
                 role={message.role}
@@ -357,10 +395,10 @@ export function Telephone(props: {
             )}
 
             {/* Listening... */}
-            {isRecording && (
+            {recognitionState.isActive && (
               <CallMessage
                 text={<>{speechInterim?.transcript.trim() || null}{speechInterim?.interimTranscript.trim() ? <i> {speechInterim.interimTranscript}</i> : null}</>}
-                variant={(isRecordingSpeech || !!speechInterim?.transcript) ? 'soft' : 'outlined'}
+                variant={(recognitionState.hasSpeech || !!speechInterim?.transcript) ? 'soft' : 'outlined'}
                 color='primary'
                 role='user'
               />
@@ -386,11 +424,11 @@ export function Telephone(props: {
       {isConnected && <CallButton Icon={CallEndIcon} text='Hang up' color='danger' variant='soft' onClick={handleCallStop} />}
       {isConnected && (pushToTalk ? (
           <CallButton
-            Icon={MicIcon} onClick={toggleRecording}
-            text={isRecordingSpeech ? 'Listening...' : isRecording ? 'Listening' : 'Push To Talk'}
-            variant={isRecordingSpeech ? 'solid' : isRecording ? 'soft' : 'outlined'}
+            Icon={MicIcon} onClick={toggleRecognition}
+            text={recognitionState.hasSpeech ? 'Listening...' : recognitionState.isActive ? 'Listening' : 'Push To Talk'}
+            variant={recognitionState.hasSpeech ? 'solid' : recognitionState.isActive ? 'soft' : 'outlined'}
             color='primary'
-            sx={!isRecording ? { backgroundColor: 'background.surface' } : undefined}
+            sx={!recognitionState.isActive ? { backgroundColor: 'background.surface' } : undefined}
           />
         ) : null
         // <CallButton disabled={true} Icon={MicOffIcon} onClick={() => setMicMuted(muted => !muted)}
@@ -406,9 +444,9 @@ export function Telephone(props: {
 
     {/* DEBUG state */}
     {avatarClickCount > 10 && (avatarClickCount % 2 === 0) && (
-      <Card variant='outlined' sx={{ maxHeight: '25dvh', overflow: 'auto', whiteSpace: 'pre', py: 0, width: '100%' }}>
-        Special commands: Stop, Retry, Try Again, Restart, Goodbye.
-        {JSON.stringify({ isSpeechEnabled, isRecordingAudio, speechInterim }, null, 2)}
+      <Card variant='outlined' sx={{ maxHeight: '25dvh', fontSize: 'sm', overflow: 'auto', whiteSpace: 'pre', py: 0, width: '100%' }}>
+        Special commands: Stop, Retry, Try Again, Restart, Goodbye.<br />
+        {JSON.stringify({ ...recognitionState, speechInterim }, null, 2)}
       </Card>
     )}
 
