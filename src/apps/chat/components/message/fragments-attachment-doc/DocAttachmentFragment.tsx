@@ -86,13 +86,16 @@ export function DocAttachmentFragment(props: {
 
   // LiveFile sync
 
+  const disableLiveFile = !onFragmentReplace
+    || !workspaceId; // NOTE: this is a trick for when used outside of a WorkspaceId context provider
+
   const { liveFileControlButton, liveFileActions } = useLiveFileSync(
     fragment.liveFileId ?? null,
     workspaceId,
     props.isMobile,
     fragmentDocPart.data.text,
-    handleReplaceFragmentLiveFileId,
-    handleReplaceDocFragmentText,
+    disableLiveFile ? undefined : handleReplaceFragmentLiveFileId,
+    disableLiveFile ? undefined : handleReplaceDocFragmentText,
   );
 
 
@@ -168,8 +171,10 @@ export function DocAttachmentFragment(props: {
       <div>{fragmentDocPart.vdt}</div>
       <div>Text Buffer Id</div>
       <div>{fragmentId}</div>
+      {!!fragment.caption && <div>Att. Caption</div>}
+      {!!fragment.caption && <div>{fragment.caption}</div>}
     </Box>
-  ), [fragment.title, fragmentDocPart, fragmentId]);
+  ), [fragment.caption, fragment.title, fragmentDocPart, fragmentId]);
 
 
   const headerRow = React.useMemo(() => {
@@ -271,17 +276,19 @@ export function DocAttachmentFragment(props: {
         />
       ) : (
         // Document viewer, including the collapse/expand state inside
-        <AutoBlocksRenderer
-          // text={marshallWrapText(fragmentDocPart.data.text, /*part.meta?.srcFileName || part.ref*/ undefined, 'markdown-code')}
-          text={fragmentDocPart.data.text}
-          renderAsCodeWithTitle={viewAsCode ? (fragmentDocPart.data?.mimeType || fragmentDocPart.ref || fragmentTitle) : undefined}
+        <Box my={1}>
+          <AutoBlocksRenderer
+            // text={marshallWrapText(fragmentDocPart.data.text, /*part.meta?.srcFileName || part.ref*/ undefined, 'markdown-code')}
+            text={fragmentDocPart.data.text}
+            renderAsCodeWithTitle={viewAsCode ? (fragmentDocPart.data?.mimeType || fragmentDocPart.ref || fragmentTitle) : undefined}
           fromRole={props.messageRole}
           contentScaling={props.contentScaling}
           fitScreen={props.isMobile}
           isMobile={props.isMobile}
           codeRenderVariant='plain'
-          textRenderVariant={props.disableMarkdownText ? 'text' : 'markdown'}
-        />
+            textRenderVariant={props.disableMarkdownText ? 'text' : 'markdown'}
+          />
+        </Box>
       )}
 
     </RenderCodePanelFrame>

@@ -72,7 +72,7 @@ export namespace GeminiWire_ContentParts {
   /**
    * The result output from a FunctionCall that contains a string representing the FunctionDeclaration.name
    * and a structured JSON object containing any output from the function is used as context to the model.
-   * This should contain the result of aFunctionCall made based on model prediction.
+   * This should contain the result of a FunctionCall made based on model prediction.
    *
    * NOTE from the online Google docs on 2024-07-20:
    * - The next conversation turn may contain a [FunctionResponse][content.part.function_response] with
@@ -212,9 +212,12 @@ export namespace GeminiWire_Messages {
   // Model Content - response.candidates[number].content
 
   export const ModelContent_schema = Content_schema.extend({
-    role: z.literal('model'),
+    role: z.literal('model')
+      .or(z.literal('MODEL')) // [Gemini]: 2024-10-29: code execution seems to return .role='MODEL' instead of 'model' when .parts=[codeExecutionResult]
+      .optional(), // 2025-01-10: added because sometimes gemini sends the empty `{"candidates": [{"content": {}, ...` just for the finishreason
     // 'Model' generated contents are of fewer types compared to the ContentParts, which represent also user objects
-    parts: z.array(GeminiWire_ContentParts.ModelContentPart_schema),
+    parts: z.array(GeminiWire_ContentParts.ModelContentPart_schema)
+      .optional(), // 2025-01-10: added because sometimes gemini sends the empty `{"candidates": [{"content": {}, ...` just for the finishreason
   });
 
   // export const UserMessage_schema = Content_schema.extend({
@@ -301,6 +304,7 @@ export namespace GeminiWire_Safety {
     'HARM_CATEGORY_HATE_SPEECH',
     'HARM_CATEGORY_SEXUALLY_EXPLICIT',
     'HARM_CATEGORY_DANGEROUS_CONTENT',
+    'HARM_CATEGORY_CIVIC_INTEGRITY', // 2025-01-10
   ]);
 
   export const HarmProbability_enum = z.enum([
@@ -325,8 +329,12 @@ export namespace GeminiWire_Safety {
     'HARM_BLOCK_THRESHOLD_UNSPECIFIED',
     'BLOCK_LOW_AND_ABOVE',
     'BLOCK_MEDIUM_AND_ABOVE',
-    'BLOCK_ONLY_HIGH',
-    'BLOCK_NONE',
+    'BLOCK_ONLY_HIGH', // Content with NEGLIGIBLE, LOW, and MEDIUM will be allowed.
+    'BLOCK_NONE', // All content will be allowed.
+    /**
+     * 2025-01-10: see bug #720 and https://discuss.ai.google.dev/t/flash-2-0-doesnt-respect-block-none-on-all-harm-categories/59352/1
+     */
+    'OFF', // Turn off the safety filter.
   ]);
 
   export const SafetySetting_schema = z.object({
@@ -340,6 +348,8 @@ export namespace GeminiWire_Safety {
     'BLOCK_REASON_UNSPECIFIED',
     'SAFETY',
     'OTHER',
+    'BLOCKLIST',
+    'PROHIBITED_CONTENT',
   ]);
 
   export const PromptFeedback_schema = z.object({
@@ -384,6 +394,12 @@ export namespace GeminiWire_API_Generate_Content {
     temperature: z.number().min(0).max(2).optional(),
     topP: z.number().optional(),
     topK: z.number().int().optional(),
+
+    // Added on 2025-01-10 - commented out for now
+    // presencePenalty: z.number().optional(),
+    // frequencyPenalty: z.number().optional(),
+    // responseLogprobs: z.boolean().optional(),
+    // logprobs: z.number().int().optional(),
   });
 
   export type Request = z.infer<typeof Request_schema>;

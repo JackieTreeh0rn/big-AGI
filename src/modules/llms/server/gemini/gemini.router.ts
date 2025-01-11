@@ -22,8 +22,17 @@ const DEFAULT_GEMINI_HOST = 'https://generativelanguage.googleapis.com';
 
 export function geminiAccess(access: GeminiAccessSchema, modelRefId: string | null, apiPath: string): { headers: HeadersInit, url: string } {
 
-  const geminiKey = access.geminiKey || env.GEMINI_API_KEY || '';
-  const geminiHost = fixupHost(DEFAULT_GEMINI_HOST, apiPath);
+  const geminiHost = fixupHost(access.geminiHost || DEFAULT_GEMINI_HOST, apiPath);
+  let geminiKey = access.geminiKey || env.GEMINI_API_KEY || '';
+
+  // multi-key with random selection - https://github.com/enricoros/big-AGI/issues/653
+  if (geminiKey.includes(',')) {
+    const multiKeys = geminiKey
+      .split(',')
+      .map(key => key.trim())
+      .filter(Boolean);
+    geminiKey = multiKeys[Math.floor(Math.random() * multiKeys.length)];
+  }
 
   // update model-dependent paths
   if (apiPath.includes('{model=models/*}')) {
@@ -59,6 +68,7 @@ async function geminiPOST<TOut extends object, TPostBody extends object>(access:
 export const geminiAccessSchema = z.object({
   dialect: z.enum(['gemini']),
   geminiKey: z.string(),
+  geminiHost: z.string(),
   minSafetyLevel: GeminiWire_Safety.HarmBlockThreshold_enum,
 });
 export type GeminiAccessSchema = z.infer<typeof geminiAccessSchema>;
