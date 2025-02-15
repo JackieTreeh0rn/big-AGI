@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Button, FormControl, Tooltip, Typography } from '@mui/joy';
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded';
 
-import type { DModelsServiceId } from '~/common/stores/llms/modelsservice.types';
+import type { DModelsServiceId } from '~/common/stores/llms/llms.service.types';
 import { FormLabelStart } from '~/common/components/forms/FormLabelStart';
 import { FormSwitchControl } from '~/common/components/forms/FormSwitchControl';
 import { FormTextField } from '~/common/components/forms/FormTextField';
@@ -55,8 +55,8 @@ export function OllamaServiceSetup(props: { serviceId: DModelsServiceId }) {
     <FormControl orientation='horizontal'>
       <FormLabelStart title='Image Input' description='PNG only' />
       <Typography level='body-sm'>
-        Images are well supported (e.g. try Llama3.2-vision). However only the PNG format is accepted by the Ollama API.
-        For attachments, use the &quot;Original&quot; format option.
+        Ollama supports PNG images (e.g. try Llama3.2-vision).
+        For Image attachments, use the &quot;Original&quot; format option.
       </Typography>
     </FormControl>
 
