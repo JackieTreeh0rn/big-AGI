@@ -51,14 +51,14 @@ services:
         # - "gantry.services.excluded=true"
         - traefik.enable=true
         - traefik.swarm.network=traefik-public
-        # - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`) && PathPrefix(`/coinbasepaper`)
+        # - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`) && PathPrefix(`/public`)
         - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`)
         # Setting this in global -- command config above for all services
         # - traefik.http.routers.bigagi.tls=true
         # - traefik.http.routers.bigagi.tls.certresolver=letsencrypt
         # - traefik.http.routers.bigagi.tls.domains[0].main=${ROOT_DOMAIN}
         # - traefik.http.routers.bigagi.tls.domains[0].sans=*.${ROOT_DOMAIN}
-        - traefik.http.routers.bigagi.entrypoints=websecure
+        # - traefik.http.routers.bigagi.entrypoints=websecure
         - traefik.http.routers.bigagi.middlewares=chain-no-auth-stash@file,error-pages
         - traefik.http.routers.bigagi.service=bigagi-svc
         - traefik.http.services.bigagi-svc.loadbalancer.server.port=3000
