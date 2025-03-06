@@ -10,27 +10,82 @@
 
 version: '3.9'
 
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
 services:
   big-agi:
-    image: big-agi:latest
-    restart: always
-    # network_mode: host
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    ports:
-      - "3000:3000"
+    image: registry.bitwisesolutions.co/big-agi:latest
+    # extra_hosts:
+    #   - host.docker.internal:host-gateway
+    # ports:
+    #   - "3000:3000"
     env_file:
       - .env
     environment:
       - PUPPETEER_WSS_ENDPOINT=ws://browserless:3000
+    networks:
+      - big-agi
+      - traefik-public
     command: [ "next", "start", "-p", "3000" ]
     depends_on:
       - browserless
+    deploy:
+      mode: replicated
+      restart_policy:
+        condition: on-failure
+      replicas: 1
+      # placement:
+      #   constraints:
+      #     - node.labels.WIRED == YES
+      # update_config:
+      #   parallelism: 1
+      #   delay: 1m
+      #   monitor: 15s
+      labels:
+        # - "gantry.services.excluded=true"
+        - traefik.enable=true
+        - traefik.swarm.network=traefik-public
+        # - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`) && PathPrefix(`/coinbasepaper`)
+        - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`)
+        # Setting this in global -- command config above for all services
+        # - traefik.http.routers.bigagi.tls=true
+        # - traefik.http.routers.bigagi.tls.certresolver=letsencrypt
+        # - traefik.http.routers.bigagi.tls.domains[0].main=${ROOT_DOMAIN}
+        # - traefik.http.routers.bigagi.tls.domains[0].sans=*.${ROOT_DOMAIN}
+        - traefik.http.routers.bigagi.entrypoints=websecure
+        - traefik.http.routers.bigagi.middlewares=chain-no-auth-stash@file,error-pages
+        - traefik.http.routers.bigagi.service=bigagi-svc
+        - traefik.http.services.bigagi-svc.loadbalancer.server.port=3000
+    logging: *default-logging
+
 
   browserless:
     image: browserless/chrome:latest
-    restart: always
     ports:
       - "9222:3000"  # Map host's port 9222 to container's port 3000
     environment:
       - MAX_CONCURRENT_SESSIONS=10
+    deploy:
+      mode: replicated
+      restart_policy:
+        condition: on-failure
+      replicas: 1
+      # placement:
+      #   constraints:
+      #     - node.labels.WIRED == YES
+    networks:
+      - big-agi
+    logging: *default-logging
+
+
+networks:
+  big-agi:
+    external: true
+  traefik-public:
+    external: true
