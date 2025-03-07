@@ -9,7 +9,7 @@ docker login -u admin -p admin13694587 registry.bitwisesolutions.co
 
 # Build
 docker login -u admin -p admin13694587 registry.bitwisesolutions.co
-docker buildx build --platform "linux/amd64,linux/arm64,linux/arm/v7" -t registry.bitwisesolutions.co/big-agi:latest --push .
+docker buildx build --platform "linux/amd64,linux/arm64" -t registry.bitwisesolutions.co/big-agi:latest --push .
 
 # Deploy
 docker stack deploy -c docker-compose-browserless-swarm.yaml big-agi
