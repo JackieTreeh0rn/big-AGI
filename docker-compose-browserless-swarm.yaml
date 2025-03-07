@@ -20,7 +20,7 @@ x-logging:
 
 services:
   big-agi:
-    image: registry.bitwisesolutions.co/big-agi:latest
+    image: ghcr.io/enricoros/big-agi:v1.16.9 #registry.bitwisesolutions.co/big-agi:latest
     # extra_hosts:
     #   - host.docker.internal:host-gateway
     # ports:
@@ -59,7 +59,7 @@ services:
         # - traefik.http.routers.bigagi.tls.domains[0].main=${ROOT_DOMAIN}
         # - traefik.http.routers.bigagi.tls.domains[0].sans=*.${ROOT_DOMAIN}
         # - traefik.http.routers.bigagi.entrypoints=websecure
-        - traefik.http.routers.bigagi.middlewares=chain-no-auth-stash@file,error-pages
+        - traefik.http.routers.bigagi.middlewares=chain-no-auth-v2@file,error-pages
         - traefik.http.routers.bigagi.service=bigagi-svc
         - traefik.http.services.bigagi-svc.loadbalancer.server.port=3000
     logging: *default-logging
