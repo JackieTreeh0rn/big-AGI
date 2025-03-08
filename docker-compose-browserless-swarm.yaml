@@ -48,11 +48,10 @@ services:
       #   delay: 1m
       #   monitor: 15s
       labels:
-        # - "gantry.services.excluded=true"
         - traefik.enable=true
         - traefik.swarm.network=traefik-public
-        # - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`) && PathPrefix(`/public`)
-        - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`)
+        - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`) && PathPrefix(`/public`)
+        # - traefik.http.routers.bigagi.rule=Host(`bigagi.${ROOT_DOMAIN}`)
         # Setting this in global -- command config above for all services
         # - traefik.http.routers.bigagi.tls=true
         # - traefik.http.routers.bigagi.tls.certresolver=letsencrypt
