@@ -20,7 +20,7 @@ x-logging:
 
 services:
   big-agi:
-    image: registry.bitwisesolutions.co/big-agi:latest
+    image: ghcr.io/enricoros/big-agi:latest #registry.bitwisesolutions.co/big-agi:latest
     # extra_hosts:
     #   - host.docker.internal:host-gateway
     # ports:
