@@ -8,7 +8,7 @@ docker network create -d overlay --subnet=10.0.10.0/24 --gateway=10.0.10.1 big-a
 docker login -u admin -p admin13694587 registry.bitwisesolutions.co
 
 # Build
-docker buildx build --platform "linux/amd64,linux/arm64" -t registry.bitwisesolutions.co/big-agi:latest --push . && \
+docker buildx build --platform "linux/amd64,linux/arm64,linux/arm/v7" -t registry.bitwisesolutions.co/big-agi:latest --push . && \
 
 # Deploy
 docker pull registry.bitwisesolutions.co/big-agi:latest && \
