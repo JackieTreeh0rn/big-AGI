@@ -54,4 +54,4 @@ next-env.d.ts
 /.run/dev (ENV).run.xml
 /src/modules/3rdparty/aider/scratch*
 
-./deploy-swarm.sh
+# ./deploy-swarm.sh
