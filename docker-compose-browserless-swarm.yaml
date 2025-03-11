@@ -40,9 +40,9 @@ services:
       restart_policy:
         condition: on-failure
       replicas: 1
-      # placement:
-      #   constraints:
-      #     - node.labels.WIRED == YES
+      placement:
+        constraints:
+          - node.labels.GLUSTER == YES
       # update_config:
       #   parallelism: 1
       #   delay: 1m
@@ -77,9 +77,9 @@ services:
       restart_policy:
         condition: on-failure
       replicas: 1
-      # placement:
-      #   constraints:
-      #     - node.labels.WIRED == YES
+      placement:
+        constraints:
+          - node.labels.GLUSTER == YES
     networks:
       - big-agi
     logging: *default-logging
