@@ -1,9 +1,17 @@
 #!/bin/bash
 
-export ROOT_DOMAIN=bitwisesolutions.co #Traefik
+set -o allexport
+. ./.env
 
-# docker login
-docker login -u admin registry.bitwisesolutions.co
 
-# Build
-docker buildx build --platform "linux/amd64,linux/arm64" -t registry.bitwisesolutions.co/big-agi:latest --push .
+# BUILD - DOCKER HUB
+docker login
+docker buildx build --platform "linux/amd64,linux/arm64" -t jackietreehorn/${STACK_NAME}:latest --push .
+
+# BUILD - local registry
+docker buildx build --platform "linux/amd64,linux/arm64" -t registry.bitwisesolutions.co/${STACK_NAME}:latest --push .
+
+# BUJILD - local docker machine
+docker build -t big-agi .
+
+

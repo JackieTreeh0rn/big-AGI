@@ -1,9 +1,13 @@
 #!/bin/bash
 
-export ROOT_DOMAIN=bitwisesolutions.co #Traefik
+set -o allexport
+. ./.env
 
-docker network create -d overlay --subnet=10.0.10.0/24 --gateway=10.0.10.1 big-agi
 
+# Docker
+export PUID=$(id -u)
+export PGID=$(id -g)
+# Create Network (customize)
+docker network create -d overlay --subnet=10.0.10.0/24 --gateway=10.0.10.1 ${STACK_NAME}
 # Deploy
-# docker pull registry.bitwisesolutions.co/big-agi:latest && \
-docker stack deploy -c docker-compose-browserless-swarm.yaml big-agi
+docker stack deploy -c docker-stack-compose.yml ${STACK_NAME}
