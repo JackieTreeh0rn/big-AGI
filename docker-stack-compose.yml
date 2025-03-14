@@ -45,19 +45,69 @@ services:
         - traefik.http.routers.${ROUTER_NAME}.rule=Host(`${ROUTER_NAME}.${ROOT_DOMAIN}`)
         - traefik.http.routers.${ROUTER_NAME}.middlewares=chain-oauth-v2@file,error-pages
         - traefik.http.routers.${ROUTER_NAME}.service=${ROUTER_NAME}-svc
+        - traefik.http.routers.${ROUTER_NAME}.priority=90
+
+        # Public router (matches /public then forwards)
+        - traefik.http.routers.${PUBLIC_ROUTER_NAME}-redirect.rule=Host(`${ROUTER_NAME}.${ROOT_DOMAIN}`) && PathPrefix(`/public`)
+        - traefik.http.routers.${PUBLIC_ROUTER_NAME}-redirect.middlewares=redirect-to-public
+        - traefik.http.routers.${PUBLIC_ROUTER_NAME}-redirect.priority=110
+
+        # Middleware: perform an external redirect to the public domain
+        - traefik.http.middlewares.redirect-to-public.redirectregex.regex=^https?://${ROUTER_NAME}\.${ROOT_DOMAIN}/public/?(.*)
+        - traefik.http.middlewares.redirect-to-public.redirectregex.replacement=https://${ROUTER_NAME_PUBLIC}.${ROOT_DOMAIN}/$$1
+        - traefik.http.middlewares.redirect-to-public.redirectregex.permanent=false
             
         # Service configuration
         - traefik.http.services.${ROUTER_NAME}-svc.loadbalancer.server.port=3000
 
         # Only service with this constrain will get picked up by cloudflare companion
         - traefik.constraint=traefik-public
+    logging: *default-logging
 
-        # Setting this in global -- command config above for all services
-        # - traefik.http.routers.${ROUTER_NAME}.tls=true
-        # - traefik.http.routers.${ROUTER_NAME}.tls.certresolver=letsencrypt
-        # - traefik.http.routers.${ROUTER_NAME}.tls.domains[0].main=${ROOT_DOMAIN}
-        # - traefik.http.routers.${ROUTER_NAME}.tls.domains[0].sans=*.${ROOT_DOMAIN}
-        # - traefik.http.routers.${ROUTER_NAME}.entrypoints=websecure
+
+  big-agi-pub:
+    image: ghcr.io/enricoros/big-agi:development #registry.bitwisesolutions.co/big-agi:latest
+    # extra_hosts:
+    #   - host.docker.internal:host-gateway    # local docker only
+    # ports:
+    #   - "3000:3000"
+    env_file:
+      - .env-public
+    environment:
+      - PUPPETEER_WSS_ENDPOINT=ws://browserless:3000
+    networks:
+      - backend
+      - traefik-public
+    command: [ "next", "start", "-p", "3001" ]
+    depends_on:
+      - browserless
+    deploy:
+      mode: replicated
+      restart_policy:
+        condition: on-failure
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.GLUSTER == YES
+      # update_config:
+      #   parallelism: 1
+      #   delay: 1m
+      #   monitor: 15s
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=traefik-public
+
+      # Private router (no prefix, direct access)
+        - traefik.http.routers.${ROUTER_NAME_PUBLIC}.rule=Host(`${ROUTER_NAME_PUBLIC}.${ROOT_DOMAIN}`)
+        - traefik.http.routers.${ROUTER_NAME_PUBLIC}.middlewares=chain-basic-auth-v2@file,error-pages
+        - traefik.http.routers.${ROUTER_NAME_PUBLIC}.service=${ROUTER_NAME_PUBLIC}-svc
+        - traefik.http.routers.${ROUTER_NAME_PUBLIC}.priority=100
+
+        # Service configuration
+        - traefik.http.services.${ROUTER_NAME_PUBLIC}-svc.loadbalancer.server.port=3001
+
+        # Only service with this constrain will get picked up by cloudflare companion
+        - traefik.constraint=traefik-public
     logging: *default-logging
 
 
