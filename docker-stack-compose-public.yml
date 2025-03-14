@@ -9,14 +9,14 @@ x-logging:
     tag: "{{.Name}}"
 
 services:
-  big-agi:
+  big-agi-pub:
     image: ghcr.io/enricoros/big-agi:development #registry.bitwisesolutions.co/big-agi:latest
     # extra_hosts:
     #   - host.docker.internal:host-gateway    # local docker only
     # ports:
     #   - "3000:3000"
     env_file:
-      - .env
+      - .env-public
     environment:
       - PUPPETEER_WSS_ENDPOINT=ws://browserless:3000
     networks:
@@ -41,11 +41,20 @@ services:
         - traefik.enable=true
         - traefik.swarm.network=traefik-public
 
-        # Router config
+      # Private router (no prefix, direct access)
         - traefik.http.routers.${ROUTER_NAME}.rule=Host(`${ROUTER_NAME}.${ROOT_DOMAIN}`)
-        - traefik.http.routers.${ROUTER_NAME}.middlewares=chain-oauth-v2@file,error-pages
+        - traefik.http.routers.${ROUTER_NAME}.middlewares=chain-basic-auth-v2@file,error-pages
         - traefik.http.routers.${ROUTER_NAME}.service=${ROUTER_NAME}-svc
-            
+
+      # Public router (matches /public then rewrites)
+        - traefik.http.routers.${ROUTER_NAME}-public.rule=Host(`${ROUTER_NAME}.${ROOT_DOMAIN}`) && PathPrefix(`/public`)
+        - traefik.http.routers.${ROUTER_NAME}-public.middlewares=public-rewrite
+        - traefik.http.routers.${ROUTER_NAME}-public.service=${ROUTER_NAME}-svc
+
+      # ReplacePathRegex middleware to strip the `/public` prefix
+        - traefik.http.middlewares.public-rewrite.replacepathregex.regex=^/public/?(.*)
+        - traefik.http.middlewares.public-rewrite.replacepathregex.replacement=/$$1
+
         # Service configuration
         - traefik.http.services.${ROUTER_NAME}-svc.loadbalancer.server.port=3000
 
@@ -63,8 +72,8 @@ services:
 
   browserless:
     image: browserless/chrome:latest
-    ports:
-      - "9222:3000"  # Map host's port 9222 to container's port 3000
+    # ports:
+      # - "9222:3000"  # Map host's port 9222 to container's port 3000
     environment:
       - MAX_CONCURRENT_SESSIONS=10
     deploy:
